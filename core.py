@@ -73,7 +73,7 @@ def delete_unnecessary_obj(img, show=False):
         matrix[bit_img] = img['oldData'].astype(np.float64)[bit_img]
     img['newData'] = np.rint(matrix).astype(np.uint16)
     if show:
-        from ProcessingSeriesDICOM import imaging
+        import imaging
         path_save_img = './data/img20171118202546/clearArt'
         imaging.show_image(data_pixel=img['newData'],
                            _title=img['Location'],
@@ -125,7 +125,7 @@ def rotate_images(images, target_angle=None):
 # Запись словаря в json файл
 def to_file_json(input_dict, _path=None):
     filename = ''
-    for img in input_dict['ImagesAxial']:
+    for img in input_dict['Data']:
         if isinstance(img['oldData'], np.ndarray):
             img['oldData'] = img['oldData'].tolist()
         if isinstance(img['newData'], np.ndarray):
@@ -141,17 +141,3 @@ def to_file_json(input_dict, _path=None):
     filename += "series" + str(input_dict['CreationDate']) + ".json"
     with open(filename, "w", encoding="utf-8") as file:
         json.dump(input_dict, file)
-
-
-# Чтение данных из файла JSON
-def from_file_json(_filename):
-    with open(_filename, 'r', encoding='utf-8') as file:
-        series = json.load(file)
-    for img in series['ImagesAxial']:
-        img['oldData'] = np.array(img['oldData'])
-        img['newData'] = np.array(img['newData'])
-        img['Ellipse']['XY'] = np.array(img['Ellipse']['XY'])
-        img['Contour'] = np.array(img['Contour'])
-    for img in series['ImagesEs']:
-        img['Data'] = np.array(img['Data'])
-    return series
