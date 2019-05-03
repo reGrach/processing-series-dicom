@@ -66,19 +66,12 @@ def find_contour_brain(img):
 
 
 # Удаление сторонних объектов и артефактов (вне области головного мозга)
-def delete_unnecessary_obj(img, show=False):
+def delete_unnecessary_obj(img):
     bit_img = measure.grid_points_in_poly((512, 512), img['Contour'])
     matrix = np.zeros((512, 512))
     if bit_img.any():
         matrix[bit_img] = img['oldData'].astype(np.float64)[bit_img]
-    img['newData'] = np.rint(matrix).astype(np.uint16)
-    if show:
-        import imaging
-        path_save_img = './data/img20171118202546/clearArt'
-        imaging.show_image(data_pixel=img['newData'],
-                           _title=img['Location'],
-                           _path=path_save_img,
-                           save=True)
+    return np.rint(matrix).astype(np.uint16)
 
 
 # Аппроксимация контура эллипсом и запись в словарь параметров эллипса
