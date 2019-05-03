@@ -2,8 +2,7 @@ import pydicom
 import fnmatch
 import json
 import numpy as np
-import os
-from os import path, walk
+from os import path, walk, makedirs, stat
 
 
 # Счтитываем образец JSON
@@ -13,12 +12,7 @@ def read_json_template(_filename):
     return _dict
 
 
-def write_to_json(_filename):
-    with open(_filename, 'r', encoding='utf-8') as file:
-        _dict = json.load(file)
-    return _dict
-
-
+# Чтение ключевых слов
 def read_keywords(root):
     filename = root + '.txt'
     if path.exists(filename):
@@ -28,31 +22,61 @@ def read_keywords(root):
         return ""
 
 
-# Запись словаря в json файл
-def to_file_json(input_dict, _path=None, name=None):
-    if name is None:
-        name = 'series' + str(input_dict['Study ID']) + ".json"
+# Запись словаря в файловую систему
+def save_to_file(input_dict, _path, name):
+    # Имя JSON файла
+    if '.json' in name:
+        json_name = name
+        name_dir = name.split('.')[0].replace('series', '')
     else:
-        name = 'series' + name + '.json'
-    filename = ''
-    for img in input_dict['Data']:
-        if isinstance(img['oldData'], np.ndarray):
-            img['oldData'] = img['oldData'].tolist()
-        if isinstance(img['newData'], np.ndarray):
-            img['newData'] = img['newData'].tolist()
-        if isinstance(img['Ellipse']['XY'], np.ndarray):
-            img['Ellipse']['XY'] = img['Ellipse']['XY'].tolist()
-        if isinstance(img['Contour'], np.ndarray):
-            img['Contour'] = img['Contour'].tolist()
-    if _path:
-        filename = str(_path) + '/'
+        name_dir = name
+        json_name = 'series' + name + '.json'
+
+    # Подготовка дирректорий
+    dirs = {'main': str(_path),
+            'oldData': str(_path) + str(name_dir) + '/oldData',
+            'newData': str(_path) + str(name_dir) + '/newData',
+            'Ellipse': str(_path) + str(name_dir) + '/Ellipse',
+            'Contour': str(_path) + str(name_dir) + '/Contour',
+            }
+    for item in dirs.keys():
         try:
-            os.stat(_path)
+            stat(dirs[item])
         except FileNotFoundError:
-            os.makedirs(_path)
-    filename += name
+            makedirs(dirs[item])
+
+    for img in input_dict['Data']:
+        _npy = str(img['Number']) + '.npy'
+
+        np.save(path.join(dirs['oldData'], _npy), img['oldData'])
+        img['oldData'] = path.join(dirs['oldData'], _npy)
+        np.save(path.join(dirs['newData'], _npy), img['newData'])
+        img['newData'] = path.join(dirs['newData'], _npy)
+        np.save(path.join(dirs['Ellipse'], _npy), img['Ellipse']['XY'])
+        img['Ellipse']['XY'] = path.join(dirs['Ellipse'], _npy)
+        np.save(path.join(dirs['Contour'], _npy), img['Contour'])
+        img['Contour'] = path.join(dirs['Contour'], _npy)
+
+    filename = path.join(dirs['main'], json_name)
     with open(filename, "w", encoding="utf-8") as file:
         json.dump(input_dict, file)
+
+
+# Запись словаря в файловую систему
+def load_from_files(name, _path):
+    # Имя JSON файла
+    if '.json' not in name:
+        name = 'series' + name + '.json'
+
+    _filename = path.join(_path, name)
+    with open(_filename, 'r', encoding='utf-8') as file:
+        result = json.load(file)
+    for img in result['Data']:
+        img.update({'oldData': np.load(img['oldData'])})
+        img.update({'newData': np.load(img['newData'])})
+        img.update({'Contour': np.load(img['Contour'])})
+        img['Ellipse']['XY'] = np.load(img['Ellipse']['XY'])
+    return result
 
 
 # Получаем все файлы из указанной дирректории
@@ -81,19 +105,7 @@ def sorted_images(arr_pixdata):
     return new_arr_dict
 
 
-# Чтение данных из файла JSON
-def from_file_json(_filename):
-    with open(_filename, 'r', encoding='utf-8') as file:
-        series = json.load(file)
-    for img in series['Data']:
-        img['oldData'] = np.array(img['oldData'])
-        img['newData'] = np.array(img['newData'])
-        img['Ellipse']['XY'] = np.array(img['Ellipse']['XY'])
-        img['Contour'] = np.array(img['Contour'])
-    return series
-
-
-# Импортируем серию в словарь (удобно хранить, меньше памяти занимает)
+# Импортируем серию в словарь (удобно хранить)
 def form_dicom_to_dict(_path, di_files, tmp, path_wrt=None):
     series = tmp.copy()
     series['Key'] = read_keywords(_path)
@@ -124,6 +136,6 @@ def form_dicom_to_dict(_path, di_files, tmp, path_wrt=None):
             })
     series['Data'] = sorted_images(pixel_data)
     if path_wrt is not None:
-        to_file_json(series, path_wrt, name=path.split(_path)[-1])
+        save_to_file(series, path_wrt, name=path.split(_path)[-1])
     return series
 

@@ -71,23 +71,28 @@ def delete_unnecessary_obj(img):
     matrix = np.zeros((512, 512))
     if bit_img.any():
         matrix[bit_img] = img['oldData'].astype(np.float64)[bit_img]
+    # img['newData'] = np.rint(matrix).astype(np.uint16)
     return np.rint(matrix).astype(np.uint16)
 
 
 # Аппроксимация контура эллипсом и запись в словарь параметров эллипса
-def approximate_ellipse(img):
+def approximate_ellipse(contour):
     ellipse = measure.EllipseModel()
-    if ellipse.estimate(img['Contour']):
-        img['Ellipse']['XY'] = ellipse.predict_xy(np.linspace(0, 2 * np.pi, 1000), params=ellipse.params)
-        img['Ellipse']['Xc'] = float(ellipse.params[1])
-        img['Ellipse']['Yc'] = float(ellipse.params[0])
-        img['Ellipse']['a'] = float(ellipse.params[2])
-        img['Ellipse']['b'] = float(ellipse.params[3])
-        img['Ellipse']['theta'] = float(ellipse.params[4])
-        residuals_array = ellipse.residuals(img['Contour'])
-        img['Ellipse']['dev'] = float(np.sqrt(np.sum((residuals_array ** 2) / len(residuals_array))))
+    ellipse_dict = {'XY': [], 'Xc': 0, 'Yc': 0, 'a': 0, 'b': 0, 'theta': 0, 'dev': 0}
+    if ellipse.estimate(contour):
+        ellipse_dict.update({'XY': ellipse.predict_xy(np.linspace(0, 2 * np.pi, 1000), params=ellipse.params)})
+        ellipse_dict.update({'Xc': float(ellipse.params[1])})
+        ellipse_dict.update({'Yc': float(ellipse.params[0])})
+        ellipse_dict.update({'a': float(ellipse.params[2])})
+        ellipse_dict.update({'b': float(ellipse.params[3])})
+        ellipse_dict.update({'theta': float(ellipse.params[4])})
+        # Вычисление ошибки
+        residuals_array = ellipse.residuals(contour)
+        calc_dev = float(np.sqrt(np.sum((residuals_array ** 2) / len(residuals_array))))
+        ellipse_dict.update({'dev': calc_dev})
     else:
         print('Проблема с эллипсом')
+    return ellipse_dict
 
 
 # Поиск медианы из массива углов наклона эллипса
@@ -112,25 +117,9 @@ def rotate_images(images, target_angle=None):
     if not target_angle:
         target_angle = find_med_ang(images)
     for img in images:
-        img['newData'] = transform.rotate(img['newData'], target_angle)
-
-
-# Запись словаря в json файл
-def to_file_json(input_dict, _path=None):
-    filename = ''
-    for img in input_dict['Data']:
-        if isinstance(img['oldData'], np.ndarray):
-            img['oldData'] = img['oldData'].tolist()
-        if isinstance(img['newData'], np.ndarray):
-            img['newData'] = img['newData'].tolist()
-        if isinstance(img['Ellipse']['XY'], np.ndarray):
-            img['Ellipse']['XY'] = img['Ellipse']['XY'].tolist()
-        if isinstance(img['Contour'], np.ndarray):
-            img['Contour'] = img['Contour'].tolist()
-    for img in input_dict['ImagesEs']:
-        img['Data'] = img['Data'].tolist()
-    if _path:
-        filename = str(_path) + '/'
-    filename += "series" + str(input_dict['CreationDate']) + ".json"
-    with open(filename, "w", encoding="utf-8") as file:
-        json.dump(input_dict, file)
+        cntr = (img['Ellipse']['Xc'], img['Ellipse']['Yc'])
+        rotated_img = transform.rotate(img['newData'],
+                                       target_angle,
+                                       center=cntr,
+                                       preserve_range=True)
+        img['newData'] = np.rint(rotated_img).astype(np.uint16)
