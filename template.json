@@ -6,6 +6,9 @@
   "Patient's Sex": "",
   "Patient's Age": "",
   "Photometric Interpretation": "",
+  "Angle of rotation": "",
+  "Pixel Spacing": "",
+  "Slice Thickness": "",
   "Key": "",
   "Data": []
 }

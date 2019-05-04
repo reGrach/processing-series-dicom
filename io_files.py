@@ -5,6 +5,13 @@ import numpy as np
 from os import path, walk, makedirs, stat
 
 
+
+def simple_read_json(name, _path):
+    _filename = path.join(_path, name)
+    with open(_filename, 'r', encoding='utf-8') as file:
+        result = json.load(file)
+    return result
+
 # Счтитываем образец JSON
 def read_json_template(_filename):
     with open(_filename, 'r', encoding='utf-8') as file:
@@ -64,6 +71,10 @@ def save_to_file(input_dict, _path, name):
 
 # Запись словаря в файловую систему
 def load_from_files(name, _path):
+    if '..' in _path:
+        beg = 0
+    else:
+        beg = 1
     # Имя JSON файла
     if '.json' not in name:
         name = 'series' + name + '.json'
@@ -71,11 +82,12 @@ def load_from_files(name, _path):
     _filename = path.join(_path, name)
     with open(_filename, 'r', encoding='utf-8') as file:
         result = json.load(file)
+
     for img in result['Data']:
-        img.update({'oldData': np.load(img['oldData'])})
-        img.update({'newData': np.load(img['newData'])})
-        img.update({'Contour': np.load(img['Contour'])})
-        img['Ellipse']['XY'] = np.load(img['Ellipse']['XY'])
+        img.update({'oldData': np.load(str(img['oldData'])[beg:])})
+        img.update({'newData': np.load(img['newData'][beg:])})
+        img.update({'Contour': np.load(img['Contour'][beg:])})
+        img['Ellipse']['XY'] = np.load(img['Ellipse']['XY'][beg:])
     return result
 
 
@@ -106,14 +118,14 @@ def sorted_images(arr_pixdata):
 
 
 # Импортируем серию в словарь (удобно хранить)
-def form_dicom_to_dict(_path, di_files, tmp, path_wrt=None):
-    series = tmp.copy()
+def form_dicom_to_dict(_path, di_files, tmp_dir):
+    series = read_json_template(tmp_dir)
     series['Key'] = read_keywords(_path)
     fl_for_info = pydicom.dcmread(path.join(_path, di_files[0]))
     pixel_data = []
     for el in fl_for_info:
         if el.name in series:
-            series[el.name] = el.value
+            series[el.name] = str(el.value)
     for name in di_files:
         _filename = path.join(_path, name)
         scan = pydicom.dcmread(_filename)
@@ -135,7 +147,5 @@ def form_dicom_to_dict(_path, di_files, tmp, path_wrt=None):
                 }
             })
     series['Data'] = sorted_images(pixel_data)
-    if path_wrt is not None:
-        save_to_file(series, path_wrt, name=path.split(_path)[-1])
     return series
 

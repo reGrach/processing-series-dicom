@@ -1,4 +1,3 @@
-import json
 import numpy as np
 from skimage import measure, transform
 
@@ -40,20 +39,26 @@ def modify_voi_lut(matrix,
             matrix[to_scale] = ((matrix[to_scale] - (wc - 0.5)) / (ww - 1.0) + 0.5) * lut_range + lut_min
             # matrix[to_scale] = ((matrix[to_scale] - wc) / ww) * lut_range + lut_min
         if max_mask.any():
-            matrix[max_mask] = lut_max
+            matrix[max_mask] = lut_min
     elif function == 'SIGMOID':
         matrix = matrix.max() / (1 + np.exp(-4 * (matrix - wc) / ww))
-
-    return np.rint(matrix).astype(np.uint8)
+    #return np.rint(matrix).astype(np.uint8)
+    return matrix
 
 
 # Определение ключевого контура для исследования (по коре головного мозга)
 def find_contour_brain(img):
-    contours = measure.find_contours(modify_voi_lut(img, [-500, 2]), 0.5)
+    data_pixel = np.zeros((520, 520))
+    for row in range(520):
+        data_pixel[row + 4][4:516] = img[row]
+        if row > 510:
+            break
+
+    contours = measure.find_contours(modify_voi_lut(data_pixel, [-500, 2]), 0.5)
     ind_min = 0
     min_dev = 1000
     for ind in range(len(contours)):
-        if len(contours[ind]) < 300:
+        if len(contours[ind]) < 350:
             continue
         dev_xy = np.abs(np.mean(contours[ind].T[0]) - np.shape(img)[0] / 2) + \
                  np.abs(np.mean(contours[ind].T[1]) - np.shape(img)[1] / 2)
@@ -62,7 +67,7 @@ def find_contour_brain(img):
         if dev_xy < min_dev:
             min_dev = dev_xy
             ind_min = ind
-    return np.round(contours[ind_min]).astype(int)
+    return np.round(contours[ind_min]).astype(int) - 4
 
 
 # Удаление сторонних объектов и артефактов (вне области головного мозга)
@@ -71,7 +76,6 @@ def delete_unnecessary_obj(img):
     matrix = np.zeros((512, 512))
     if bit_img.any():
         matrix[bit_img] = img['oldData'].astype(np.float64)[bit_img]
-    # img['newData'] = np.rint(matrix).astype(np.uint16)
     return np.rint(matrix).astype(np.uint16)
 
 
@@ -117,9 +121,7 @@ def rotate_images(images, target_angle=None):
     if not target_angle:
         target_angle = find_med_ang(images)
     for img in images:
-        cntr = (img['Ellipse']['Xc'], img['Ellipse']['Yc'])
         rotated_img = transform.rotate(img['newData'],
                                        target_angle,
-                                       center=cntr,
                                        preserve_range=True)
         img['newData'] = np.rint(rotated_img).astype(np.uint16)
